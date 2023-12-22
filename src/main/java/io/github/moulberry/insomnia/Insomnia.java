@@ -1,3 +1,31 @@
+/**
+ * Insomnia.java
+ *
+ * Insomnia was originally released by Moulberry under
+ * the terms of the CC BY 3.0 License:
+ * https://github.com/Moulberry/Insomnia
+ *
+ * This modification to Insomnia is also released under
+ * the terms of the CC BY 3.0 License:
+ * https://github.com/RayDeeUx/Insomnia
+ *
+ * For the legal code of the CC BY 3.0 license, see here:
+ * https://creativecommons.org/licenses/by/3.0/legalcode.txt
+ * ...as well as here:
+ * https://creativecommons.org/licenses/by/3.0/legalcode
+ *
+ * For the human-readable version of the CC BY 3.0 license, see here:
+ * https://creativecommons.org/licenses/by/3.0/
+ *
+ * This modification to Insomnia includes an additional subcommand
+ * to either increase or decrease the extent of player skin replacement,
+ * and an additional check to skip pixels representing the player skin's
+ * hat/secondary layer. Due to the nature of Dream's skin, checking the
+ * player's hat/secondary layer is often unnecessary.
+ *
+ * - Erymanthus | u/RayDeeUx
+ */
+
 package io.github.moulberry.insomnia;
 
 import com.google.gson.GsonBuilder;
@@ -36,9 +64,11 @@ import java.util.UUID;
 @Mod(modid = Insomnia.MODID, version = Insomnia.VERSION, clientSideOnly = true)
 public class Insomnia {
     public static final String MODID = "insomnia";
-    public static final String VERSION = "1.0-REL";
+    public static final String VERSION = "1.1-REL";
 
     public static boolean enabled = true;
+    public static boolean skipHatLayer = true;
+    public static double threshold = 0.7;
 
     @EventHandler
     public void preinit(FMLPreInitializationEvent event) {
@@ -48,7 +78,7 @@ public class Insomnia {
             @Override
             public void processCommand(ICommandSender sender, String[] args) {
                 if(args.length != 1) {
-                    sender.addChatMessage(new ChatComponentText(EnumChatFormatting.RED+"Invalid usage: /insomnia on/off"));
+                    sender.addChatMessage(new ChatComponentText(EnumChatFormatting.RED+"Invalid usage: /insomnia <on/off/threshold/hat>"));
                     return;
                 }
                 if(args[0].equalsIgnoreCase("on")) {
@@ -57,63 +87,33 @@ public class Insomnia {
                 } else if(args[0].equalsIgnoreCase("off")) {
                     enabled = false;
                     sender.addChatMessage(new ChatComponentText(EnumChatFormatting.GREEN+"Enabling dream skins..."));
-                } else {
-                    sender.addChatMessage(new ChatComponentText(EnumChatFormatting.RED+"Invalid usage: /insomnia on/off"));
-                }
-            }
-        }));
-    }
-
-    @SubscribeEvent
-    public void onWorldSwitch(WorldEvent.Unload event) {
-        dreamSkins.clear();
-    }
-
-    public static boolean isDreamSkin(UUID uuid, ResourceLocation resourceLocation) {
-        if(!enabled) return false;
-
-        if(dreamSkins.containsKey(uuid)) return dreamSkins.get(uuid);
-
-        if(!resourceLocation.getResourcePath().contains("/")) return false;
-
-        String profileTexture = resourceLocation.getResourcePath().split("/")[1];
-
-        File skinCacheDir = new File(((MinecraftAccessor)Minecraft.getMinecraft()).getFileAssets(), "skins");
-        File file1 = new File(skinCacheDir, profileTexture.length() > 2 ? profileTexture.substring(0, 2) : "xx");
-        File file2 = new File(file1, profileTexture);
-
-        if(!file2.exists()) return false;
-
-        try(InputStream is = new FileInputStream(file2)) {
-            BufferedImage image = ImageIO.read(is);
-
-            int totalPixels = 0;
-            int totalNeonGreen = 0;
-            for(int x=0; x<image.getWidth(); x++) {
-                for(int y=0; y<image.getHeight(); y++) {
-                    int argb = image.getRGB(x, y);
-                    Color c = new Color(argb, true);
-
-                    if(c.getAlpha() > 20) {
-                        int red = c.getRed();
-                        int green = c.getGreen();
-                        int blue = c.getBlue();
-
-                        if(red == 0 && green == 0 && blue == 0) continue;
-
-                        totalPixels++;
-
-                        if(red >= 0 && red <= 140) {
-                            if(green >= 220 && green <= 260) {
-                                if(blue >= 0 && blue <= 140) {
-                                    totalNeonGreen++;
-                                }
+                } else if (args[0].equalsIgnoreCase("threshold")) {
+                    if (args.length == 1) {
+                        sender.addChatMessage(new ChatComponentText(EnumChatFormatting.RED+"Invalid usage: /insomnia threshold <number between 1 and 100>"));
+                    } else {
+                        try {
+                            String theThreshold = args[1];
+                            int theThresholdAsInt = Integer.parseInt(theThreshold);
+                            if (theThresholdAsInt <= 100 && 1 <= theThresholdAsInt) {
+                                threshold = (theThresholdAsInt / 100)
+                            } else {
+                                sender.addChatMessage(new ChatComponentText(EnumChatFormatting.RED+"Invalid usage: /insomnia threshold <number between 1 and 100>"));
                             }
+                        } catch (Exception ignored) {
+                            sender.addChatMessage(new ChatComponentText(EnumChatFormatting.RED+"Invalid usage: /insomnia threshold <number between 1 and 100>"));
+                        }
+                    }
+                } else if (args[0].equalsIgnoreCase("hat")) {
+                    if (skipHatLayer) {
+                        skipHatLayer = false;
+                    } else {
+                        skipHatLayer = true;
+                    }
                         }
                     }
                 }
             }
-            if(totalNeonGreen/(float)totalPixels > 0.7) {
+            if(totalNeonGreen/(float)totalPixels > threshold) {
                 dreamSkins.put(uuid, true);
                 return true;
             }
